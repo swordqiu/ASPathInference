@@ -13,6 +13,3 @@ bin
 *.slo
 *.lo
 *.so
-*.lai
-*.la
-*.a
