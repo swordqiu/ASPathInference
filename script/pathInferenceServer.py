@@ -199,8 +199,7 @@ def bellmanford():
 prefixlist = [];
 
 def readPrefixFile(filename):
-	try:
-		f = open(filename, "r");
+	with open(filename, "r") as f:
 		line = f.readline();
 		while len(line) > 0:
 			if line.find(":") > 0:
@@ -209,9 +208,6 @@ def readPrefixFile(filename):
 				tmp = [line[:-1]];
 			prefixlist.append(bgplib.CPrefix(tmp[0]));
 			line = f.readline();
-	except:
-		print "Exception: ", sys.exc_info()[0];
-		raise;
 
 
 def outputPath(outputdir, asn, prefix, pathset):
@@ -330,6 +326,47 @@ def terminate(val):
 if len(sys.argv) < 9:
 	print "Usage: pathInferenceServer.py dbpath isuseknown relationfile preferencefile prefixlist known_aslist nexthop [pid]";
 	sys.exit(-1);
+
+class ASInfoBase(object):
+
+    def __init__(self, db_path, relationfile, preferfile, prefixfile, knownas):
+        self.db_path = db_path
+        self.asgraph = bgplib.CASGraph(relationfile);
+        self.aspref = bgplib.CExitPreference(preferfile);
+        self.prefixtree = bgplib.CPrefixTree2(prefixfile);
+        self.prefixtree.rehash();
+        self.known_aslist = self.readASList(knownasfile);
+        print self.known_aslist;
+
+    @classmethod
+    def readASList(cls, filename):
+        with open(filename, "r") as f:
+            line = f.readline()
+            tmplist = []
+            while len(line) > 0:
+                tmplist.append(line[:-1])
+                line = f.readline()
+            return tmplist
+
+def main():
+    parser = argparse.ArgumentParser(description='AS Path Inference.')
+    parser.add_argument('--db-path', metavar='<DB_PATH>', required=True,
+                            help='AS Path DB path')
+    parser.add_argument('--use-known', action='store_true',
+                            help='Use known paths')
+    parser.add_argument('--as-relationship', metavar='<AS_RELATIONSHIP>',
+                            required=True, help='AS Relationship file')
+    parser.add_argument('--link-preference', metavar='<LINK_PREFERENCE>',
+                            required=True, help='Link preference file')
+    parser.add_argument('--prefix-list', metavar='<PREFIX_LIST>',
+                            required=True, help='Prefix list file')
+    parser.add_argument('--known-aslist', metavar='<KNOWN_ASN>',
+                            required=True, help='Known AS list')
+
+    args = parser.parse_args()
+
+    db = ASInfoBase(args.db_path, args.as_relationship, args.link_preference,
+                args.prefix_list, args.known_aslist)
 
 dbpath = sys.argv[1];
 isuseknown = sys.argv[2];
