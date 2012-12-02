@@ -14,7 +14,7 @@ if (!$home) {
 	$home = getcwd();
 }
 
-#print $home."\n";
+print $home."\n";
 
 $table = "oix-snapshot.dat";
 
@@ -23,7 +23,7 @@ print $command."\n";
 system($command);
 
 #$command = "$home/inferASrelationship_degree.py $home/$table $home/tmp/oix_relation_degree $home/tmp/oix_relation_degree2 $home/tmp/oix_degree $home/tmp/oix_preference $home/tmp/known_aslist >> $home/access_log 2>&1";
-$command = "$prog_base/script/inferRelation.py $home/tables/$table $home/tmp/oix_relation_degree $home/tmp/oix_preference >> $home/log/access_log 2>&1";
+$command = "$prog_base/script/inferRelation.py --table $home/tables/$table --as-relationship $home/tmp/oix_relation_degree --link-preference $home/tmp/oix_preference >> $home/log/access_log 2>&1";
 print $command."\n";
 system($command);
 
@@ -48,8 +48,6 @@ $command = "/bin/mv $home/tmp $home/data";
 print $command."\n";
 system($command);
 
-# pathInferenceServer.py dbpath isuseknown relationfile preferencefile prefixlist known_aslist nexthop [pid]
-$command = "$prog_base/script/pathInferenceServer.py $home/data/oixdb true $home/data/oix_relation_degree $home/data/oix_preference $home/data/oix_prefixlist $home/data/knownlist $home/log/nexthopinfo $home/log/pid >> $home/log/access_log 2>&1 &";
+$command = "$prog_base/script/startInfer.pl $home";
 print $command."\n";
 system($command);
-

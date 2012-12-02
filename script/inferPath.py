@@ -5,8 +5,9 @@ import os
 import re
 import bgplib
 import time
-import argparse
 import socket
+import httpserver
+from  asinfodb import ASInfoBase
 
 
 class InferASPath(object):
@@ -97,14 +98,14 @@ class SPFInferASPath(InferASPath):
         return self.db.aspref.getExitPref(as1, as2)
 
 
-def LUFPolicyInferASPath(LUFInferASPath):
+class LUFPolicyInferASPath(LUFInferASPath):
     """ LUF + AS policy """
 
     def get_aslink_preference(self, as1, as2):
         return bgplib.relationPriority(self.db.asgraph.getRelation(as1, as2))
 
 
-def SPFPolicyInferASPath(SPFInferASPath):
+class SPFPolicyInferASPath(SPFInferASPath):
     """ SPF + AS policy """
 
     def get_aslink_preference(self, as1, as2):
@@ -232,10 +233,12 @@ class ASPathInferer(object):
             addr = socket.gethostbyname(src)
             if addr is not None:
                 return self.get_paths(addr)
+            else:
+                return None
         return self.get_asn_paths(asn)
 
     def result_to_string(self, result):
-        tmpstr = "*** %d-%s\n" % (result['asn'], str(result['prefix']))
+        tmpstr = "*** %s %d\n" % (str(result['prefix']), result['asn'])
         tmpstr += str(result['paths']) + "\n"
         tmpstr += ">>> " + str(result['db_time']) + "\n"
         tmpstr += "^^^ " + str(result['cost']) + "\n"
@@ -253,24 +256,21 @@ class ASPathInferer(object):
         return tmpstr;
 
     def init_path_table(self):
-        for viewas in self.db.known_aslist:
-            pathlist = bgplib.getSurePath(self.db.db_path, viewas,
-                                            self.prefix_str);
-            for path in pathlist:
-                #print path;
-                for i in range(1, len(path)):
-                    subpath = path[i:]
-                    if not self.use_known and len(subpath) > 1:
-                        continue;
-                    if not self.pathtable.has_key(subpath[0]):
-                        self.pathtable[subpath[0]] = InferASPathSet(self.db,
+        pathlist = self.db.get_sure_paths(self.prefix_str);
+        for path in pathlist:
+            #print path;
+            for i in range(len(path)):
+                subpath = path[i:]
+                if not self.use_known and len(subpath) > 1:
+                    continue;
+                if not self.pathtable.has_key(subpath[0]):
+                    self.pathtable[subpath[0]] = InferASPathSet(self.db,
                                                         self.infer_path_class);
-                        self.border.append(subpath[0]);
-                        self.inborder[subpath[0]] = 1;
-                        self.fixed[subpath[0]] = 1;
-                    path_relation = self.db.get_path_relationship(subpath)
-                    self.pathtable[subpath[0]].add_known_path(subpath,
-                                                            path_relation)
+                    self.border.append(subpath[0]);
+                    self.inborder[subpath[0]] = 1;
+                    self.fixed[subpath[0]] = 1;
+                path_relation = self.db.get_path_relationship(subpath)
+                self.pathtable[subpath[0]].add_known_path(subpath, path_relation)
         for asn in self.border:
             self.pathtable[asn].sort_known_paths();
             print self.pathtable[asn];
@@ -305,90 +305,89 @@ class ASPathInferer(object):
                         self.inborder[nb] = 1
 
 
-class ASInfoBase(object):
-
-    def __init__(self, db_path, relationfile, preferfile, prefixfile, knownas):
-        self.begin_time = int(time.time()/8/3600)*8*3600;
-        self.db_path = db_path
-        self.asgraph = bgplib.CASGraph(relationfile);
-        self.aspref = bgplib.CExitPreference(preferfile);
-        self.prefixtree = bgplib.CPrefixTree2(prefixfile);
-        self.prefixtree.rehash();
-        self.known_aslist = self.read_aslist(knownas);
-        #print self.known_aslist;
-
-    @classmethod
-    def read_aslist(cls, filename):
-        with open(filename, "r") as f:
-            line = f.readline()
-            tmplist = []
-            while len(line) > 0:
-                tmplist.append(line[:-1])
-                line = f.readline()
-            return tmplist
-
-    def get_path_relationship(self, path):
-        i = 0;
-        while i < len(path) - 1 and \
-            self.asgraph.getRelation(path[i], path[i+1]) == \
-                bgplib.SIBLING_TO_SIBLING:
-            i = i + 1;
-        if i == len(path) - 1:
-            return bgplib.SIBLING_TO_SIBLING;
-        else:
-            return self.asgraph[path[i]][path[i+1]];
-
-    def get_match_prefix(self, prefix):
-        return self.prefixtree.getMatchPrefix(bgplib.CPrefix(prefix))
-
-    def get_origin_asns(self, prefix):
-        prefix = str(self.get_match_prefix(prefix))
-        asns = {}
-        for viewas in self.known_aslist:
-            pathlist = bgplib.getSurePath(self.db_path, viewas, prefix)
-            for path in pathlist:
-                if path[-1] in asns:
-                    asns[path[-1]] += 1
-                else:
-                    asns[path[-1]] = 1
-        rets = []
-        for asn, ct in sorted(asns.items(), key=lambda x: x[1], reverse=True):
-            rets.append(asn)
-        return rets
-
 
 def main():
+    import argparse
     parser = argparse.ArgumentParser(description='AS Path Inference.')
-    parser.add_argument('--db-path', metavar='<DB_PATH>', required=True,
+    parser.add_argument('--db-path', metavar='<DB_PATH>',
+                            default='/opt/data/data/oixdb',
                             help='AS Path DB path')
     parser.add_argument('--as-relationship', metavar='<AS_RELATIONSHIP>',
-                            required=True, help='AS Relationship file')
+                            default='/opt/data/data/oix_relation_degree',
+                            help='AS Relationship file')
     parser.add_argument('--link-preference', metavar='<LINK_PREFERENCE>',
-                            required=True, help='Link preference file')
+                            default='/opt/data/data/oix_preference',
+                            help='Link preference file')
     parser.add_argument('--prefix-list', metavar='<PREFIX_LIST>',
-                            required=True, help='Prefix list file')
-    parser.add_argument('--known-aslist', metavar='<KNOWN_ASN>',
-                            required=True, help='Known AS list')
-    parser.add_argument('--src', metavar='<SRC_ASN_IP>', required=True,
+                            default='/opt/data/data/oix_prefixlist',
+                            help='Prefix list file')
+    parser.add_argument('--src', metavar='<SRC_ASN_IP>',
                             action='append', help='Source ASN or IP')
-    parser.add_argument('--prefix', metavar='<DEST_PREFIX>', required=True,
+    parser.add_argument('--prefix', metavar='<DEST_PREFIX>',
                             help='Destination prefix or IP')
     parser.add_argument('--use-known', action='store_true',
                             help='Use known paths')
     parser.add_argument('--algorithm', metavar='<ALGORITHM>',
                             choices=['SPF', 'LUF', 'SPFPolicy', 'LUFPolict'],
                             help='Path selection algorithm')
+    parser.add_argument('--pid', metavar='<PID_FILE>',
+                            help='Path of pid file')
 
     args = parser.parse_args()
 
     db = ASInfoBase(args.db_path, args.as_relationship, args.link_preference,
-                args.prefix_list, args.known_aslist)
+                args.prefix_list)
 
-    inferer = ASPathInferer(db, args.prefix, args.use_known, args.algorithm)
+    if args.prefix and args.src:
+        if is_valid_address(args.prefix):
+            inferer = ASPathInferer(db, args.prefix, args.use_known, args.algorithm)
+            for src in args.src:
+                if is_valid_address(src):
+                    print inferer.get_paths_in_string(src)
+                else:
+                    print 'Invalid src %s' % src
+        else:
+            print "Invalid prefix %s" % (args.prefix)
+    else:
+        if args.pid:
+            with open(args.pid, 'w') as f:
+                f.write('%d' % os.getpid())
+        print "Ready to serve"
+        handlelist = {};
+        handlelist["infer"] = httpserver.CHTTPApp(inferPath, ["src_",
+                                    "prefix_", "use_known_", "algorithm_"], db);
+        handlelist["terminate"] = httpserver.CHTTPApp(terminate, [], db);
 
-    for src in args.src:
-        print inferer.get_paths_in_string(src)
+        httpserver.httpServerRun(handlelist, 61002);
+
+
+def is_valid_address(addr):
+    if re.match(r'\d+(\.\d+){3}', addr):
+        if bgplib.validPrefix(addr):
+            return True
+        else:
+            return False
+    else:
+        return True
+
+
+def inferPath(vals, db):
+    if is_valid_address(vals['prefix_']):
+        inferer = ASPathInferer(db, vals['prefix_'], bool(vals['use_known_']),
+                                vals['algorithm_'])
+        if is_valid_address(vals['src_']):
+            ret = inferer.get_paths_in_string(vals['src_'])
+            print ret
+            return ret
+        else:
+            return 'Invalid src %s' % vals['src_']
+    else:
+        return 'Invalid prefix %s' % vals['prefix_']
+
+
+def terminate(vals, db):
+    sys.exit(0)
 
 
 if __name__ == '__main__':
-    print main()
+    main()
