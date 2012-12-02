@@ -25,13 +25,16 @@ A=.a
 E=
 
 # Targets
-all: CreateSimpleTable1$(E) CreateSimpleTable2$(E) PYTHONLIB
+all: CreateSimpleTable1$(E) CreateSimpleTable2$(E) GetSurePath$(E)
 
 CreateSimpleTable1$(E): CreateSimpleTable1$(O) SimpleRoutingTable2$(O) Address$(O) VMEM$(O) VMEMstd$(O) MyUtil$(O) BufFile$(O)
 	$(LD) -o $(TARGET)$@ CreateSimpleTable1$(O) SimpleRoutingTable2$(O) Address$(O) VMEM$(O) VMEMstd$(O) MyUtil$(O) BufFile$(O) $(LDFLAGS)
 
 CreateSimpleTable2$(E): CreateSimpleTable2$(O) SimpleRoutingTable2$(O) VMEM$(O) VMEMstd$(O) BGPUpdate$(O) Address$(O) MyUtil$(O) BufFile$(O) DateTime$(O)
 	$(LD) -o $(TARGET)$@ CreateSimpleTable2$(O) SimpleRoutingTable2$(O) VMEM$(O) VMEMstd$(O) BGPUpdate$(O) Address$(O) MyUtil$(O) BufFile$(O) DateTime$(O) $(LDFLAGS)
+
+GetSurePath$(E): GetSurePath$(O) SimpleRoutingTable2$(O) Address$(O) VMEM$(O) VMEMstd$(O) MyUtil$(O)
+	$(LD) -o $(TARGET)$@ GetSurePath$(O) SimpleRoutingTable2$(O) Address$(O) VMEM$(O) VMEMstd$(O) MyUtil$(O) $(LDFLAGS)
 
 PYTHONLIB: setup.py PYGetSurePath$(O) SimpleRoutingTable2$(O) Address$(O) VMEM$(O) VMEMstd$(O) MyUtil$(O)
 	python setup.py build
