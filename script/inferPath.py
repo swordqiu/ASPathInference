@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import json
 import sys
 import os
 import re
@@ -30,7 +31,7 @@ class InferASPath(object):
         return self.path[0] - path2.path[0];
 
     def get_path_str(self):
-        tmpstr = '%s' % self.path[0]
+        tmpstr = '%d' % self.path[0]
         for i in range(0, len(self.path) - 1):
             tmpstr += '%s%d' % (
                 self.db.asgraph.getRelationSymbol(self.path[i], self.path[i+1]),
@@ -173,6 +174,19 @@ class InferASPathSet(object):
             return True;
 
 
+def resolve_dns(name):
+    import dns.resolver
+    try:
+        rets = []
+        answers = dns.resolver.query(name, 'A')
+        for rdata in answers:
+            rets.append('%s' % rdata)
+        return rets
+    except Exception as e:
+        print e
+    return None
+
+
 class ASPathInferer(object):
 
     def __init__(self, db, prefix, use_known, algorithm):
@@ -230,11 +244,22 @@ class ASPathInferer(object):
                 rets.append(self.get_paths(str(asn)))
             return rets
         else:
-            addr = socket.gethostbyname(src)
-            if addr is not None:
-                return self.get_paths(addr)
-            else:
+            addr_list = resolve_dns(src)
+            if addr_list is None or len(addr_list) == 0:
                 return None
+            elif len(addr_list) == 1:
+                return self.get_paths(addr_list[0])
+            else:
+                oas_list = {}
+                for addr in addr_list:
+                    asns = self.db.get_origin_asns(addr)
+                    for asn in asns:
+                        oas_list[str(asn)] = 1
+                rets = []
+                for asn_str in oas_list.keys():
+                    paths = self.get_paths(asn_str)
+                    rets.append(paths)
+                return rets
         return self.get_asn_paths(asn)
 
     def result_to_string(self, result):
@@ -256,7 +281,7 @@ class ASPathInferer(object):
         return tmpstr;
 
     def init_path_table(self):
-        pathlist = self.db.get_sure_paths(self.prefix_str);
+        pathlist = self.db.get_sure_paths(self.prefix_str)['paths'];
         for path in pathlist:
             #print path;
             for i in range(len(path)):
@@ -356,6 +381,8 @@ def main():
         handlelist = {};
         handlelist["infer"] = httpserver.CHTTPApp(inferPath, ["src_",
                                     "prefix_", "use_known_", "algorithm_"], db);
+        handlelist['aspeers'] = httpserver.CHTTPApp(get_aspeers, ['asn_'], db);
+        handlelist['surepaths'] = httpserver.CHTTPApp(get_sure_paths, ['prefix_'], db);
         handlelist["terminate"] = httpserver.CHTTPApp(terminate, [], db);
 
         httpserver.httpServerRun(handlelist, 61002);
@@ -373,16 +400,54 @@ def is_valid_address(addr):
 
 def inferPath(vals, db):
     if is_valid_address(vals['prefix_']):
-        inferer = ASPathInferer(db, vals['prefix_'], bool(vals['use_known_']),
+        if not re.match(r'^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?', vals['prefix_']):
+            addr_list = resolve_dns(vals['prefix_'])
+            if addr_list is None or len(addr_list) == 0:
+                return 'Invalid domain name %s' % vals['prefix_']
+            else:
+                prefix = addr_list[0]
+            #else:
+            #    return 'Domain name %s resolves to multiple address: %s' % (
+            #            vals['prefix_'], ','.join(addr_list))
+        else:
+            prefix = vals['prefix_']
+        inferer = ASPathInferer(db, prefix, bool(vals['use_known_']),
                                 vals['algorithm_'])
         if is_valid_address(vals['src_']):
             ret = inferer.get_paths_in_string(vals['src_'])
-            print ret
+            #print ret
             return ret
         else:
             return 'Invalid src %s' % vals['src_']
     else:
         return 'Invalid prefix %s' % vals['prefix_']
+
+
+def get_aspeers(vals, db):
+    asn = vals['asn_']
+    if re.match(r'/^AS%d+/i', asn):
+        asn = asn[2:]
+    peers = db.get_peers(int(asn))
+    rets = []
+    for p in peers:
+        rets.extend(p)
+    #print rets
+    return ' '.join(map(str, rets))
+
+
+def get_sure_paths(vals, db):
+    prefix = vals['prefix_']
+    if not re.match(r'^\d{1,3}(\.\d{1,3}){3}(/\d{1,2})?$', prefix):
+        addr_list = resolve_dns(prefix)
+        if addr_list is None or len(addr_list) == 0:
+            return 'Invalid domain name %s' % prefix
+        else:
+            prefix = addr_list[0]
+    paths = db.get_sure_paths(prefix)
+    if paths is not None:
+        return json.dumps(paths)
+    else:
+        return 'No data'
 
 
 def terminate(vals, db):

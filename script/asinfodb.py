@@ -48,7 +48,7 @@ class ASInfoBase(object):
         for viewas in self.known_aslist:
             pathlist = self.get_sure_path(viewas, prefix)
             paths.extend(self.get_sure_path(viewas, prefix))
-        return paths
+        return {'prefix': prefix, 'paths': paths}
 
     def get_origin_asns(self, prefix):
         paths = self.get_sure_paths(prefix)
@@ -65,6 +65,12 @@ class ASInfoBase(object):
             path = os.path.join(os.path.dirname(bgplib.__file__), '../bin')
             self.lib_bin_path = os.path.abspath(path)
         return self.lib_bin_path
+
+    def get_peers(self, asn):
+        rets = []
+        for nb in self.asgraph[asn].keys():
+            rets.append(tuple([nb, self.asgraph[asn][nb]]))
+        return tuple(rets)
 
     def get_sure_path(self, asn, prefixstr):
         bin_path = os.path.join(self.get_lib_bin_path(), 'GetSurePath')
@@ -111,7 +117,8 @@ def main():
                 args.prefix_list)
 
     print db.get_origin_asns('166.111.64.1')
-
+    print db.get_peers(4538)
+    print db.get_sure_paths('166.111.64.1')
 
 if __name__ == '__main__':
     main()

@@ -86,4 +86,7 @@ bool is_valid_asn(u_int32_t asn);
 #define IsOrigin(x) ((strchr(PATH_ORIGIN,x)==NULL)? false:true)
 #define IsStatus(x) ((strchr(PATH_STATUS,x)==NULL)? false:true)
 
+bool is_directory(const char* path);
+bool is_regular_file(const char* path);
+
 #endif // !defined(AFX_MYUTIL_H__C255F8D1_E924_442D_BBC4_EDE2C8DE7F80__INCLUDED_)

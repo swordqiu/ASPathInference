@@ -1,5 +1,12 @@
 #!/bin/bash
 
+if [ $# -lt 1 ]; then
+    echo "Usage: startInfer.sh <HOME>"
+    exit -1
+fi
+
+HOME=$1
+
 pushd $(dirname $(readlink -f "$BASH_SOURCE")) > /dev/null
 ROOT_DIR=$(cd .. && pwd)
 popd > /dev/null
@@ -16,4 +23,10 @@ function screen_it {
 
 echo $ROOT_DIR
 
-screen_it aspath "cd /opt/data;$ROOT_DIR/script/batchProcess.pl /opt/data"
+if [ -f $HOME/log/pid ]; then
+    PID=`cat $HOME/log/pid`
+    kill -9 $PID
+    sleep 1
+fi
+
+screen_it aspath "cd /opt/data;$ROOT_DIR/script/startInfer.pl $1"

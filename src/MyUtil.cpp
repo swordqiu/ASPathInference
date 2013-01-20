@@ -495,15 +495,15 @@ u_int32_t asn_a2n(const char* asn_str) {
 
 const char* asn_n2a(u_int32_t asn) {
 	static char temp[32];
-	if (asn > 65535) {
+	/*if (asn > 65535) {
 		u_int32_t a = (asn >> 16);
 		u_int32_t b = (asn & 0xFFFF);
 		sprintf(temp, "%d.%d", a, b);
 		return temp;
-	}else {
+	}else {*/
 		sprintf(temp, "%d", asn);
 		return temp;
-	}
+	/*}*/
 }
 
 //// IANA: http://www.iana.org/assignments/as-numbers
@@ -523,3 +523,29 @@ bool is_valid_asn(u_int32_t asn) {
 	}
 }
 
+static mode_t get_file_mode(const char* path) {
+    struct stat fs;
+    if (stat(path, &fs) == 0) {
+        return fs.st_mode;
+    }else {
+        return 0;
+    }
+}
+
+bool is_directory(const char* path) {
+    mode_t mode = get_file_mode(path);
+    if (S_ISDIR(mode)) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool is_regular_file(const char* path) {
+    mode_t mode = get_file_mode(path);
+    if (S_ISREG(mode)) {
+        return true;
+    } else{
+        return false;
+    }
+}

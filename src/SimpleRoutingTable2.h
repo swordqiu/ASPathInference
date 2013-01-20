@@ -116,9 +116,9 @@ public:
 	void Init(char* filename, bool isReadOnly = false);
 	bool FindByPrefixASNPair(CPrefix* prefix, u_int32_t asn, long* pindex);
 	void AddRecord(CPrefix* prefix, u_int32_t asn);
-	bool FindByPrefix(CPrefix* prefix, long* pindex);
-	bool PrintAllASNOfPrefix(CPrefix* prefix);
-	bool GetAllASNOfPrefix(CPrefix* prefix, CDynaArray* array);
+	bool FindByASN(u_int32_t asn, long* pindex);
+	bool PrintAllPrefixOfASN(u_int32_t asn);
+	bool GetAllPrefixOfASN(u_int32_t asn, CDynaArray* array);
 };
 
 } /* end of namespace bgplib */

@@ -27,19 +27,6 @@ $command = "$prog_base/script/inferRelation.py --table $home/tables/$table --as-
 print $command."\n";
 system($command);
 
-$url = "http://127.0.0.1:61002/terminate";
-get($url);
-
-if(-e "$home/log/pid") {
-  open(PID, "<$home/log/pid");
-  $pid = <PID>;
-  chomp($pid);
-  close(PID);
-  $command = "kill -9 $pid";
-  print $command."\n";
-  system($command);
-}
-
 $command = "/bin/rm -fr $home/data";
 print $command."\n";
 system($command);
@@ -48,6 +35,6 @@ $command = "/bin/mv $home/tmp $home/data";
 print $command."\n";
 system($command);
 
-$command = "$prog_base/script/startInfer.pl $home";
+$command = "$prog_base/script/startInfer.sh $home";
 print $command."\n";
 system($command);

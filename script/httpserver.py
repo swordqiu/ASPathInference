@@ -35,10 +35,11 @@ class CAppServer(BaseHTTPServer.BaseHTTPRequestHandler):
         global handleHash
         hasValue = False
         val = {}
-        for name in handleHash[app].namespace:
-            val[name] = HTTPGetValue(line, name)
-            if len(val[name]) > 0:
-                hasValue = True
+        if app in handleHash:
+            for name in handleHash[app].namespace:
+                val[name] = HTTPGetValue(line, name)
+                if len(val[name]) > 0:
+                    hasValue = True
         if len(handleHash[app].namespace) == 0 or hasValue:
             ret = handleHash[app].process(val)
             self.send_response(200, "OK")

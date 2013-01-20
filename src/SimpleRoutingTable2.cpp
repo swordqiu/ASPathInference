@@ -81,6 +81,12 @@ CPrefixASNPair::CPrefixASNPair(const CPrefixASNPair& clone) {
 CPrefixASNPair::~CPrefixASNPair() {
 }
 
+char* CPrefixASNPair::toString() {
+    static char temp[1024];
+    sprintf(temp, "%18s %d %d", m_prefix.toString(), m_asn, m_counter);
+    return temp;
+}
+
 /***************************************************/
 
 CASNPathPair::CASNPathPair() {
@@ -458,7 +464,13 @@ CPrefixASNMap::CPrefixASNMap(char* filename, bool isReadOnly) {
 }
 
 void CPrefixASNMap::Init(char* filename, bool isReadOnly) {
-	InitSMEM(sizeof(CPrefixASNPair), filename, isReadOnly);
+    char temp[256];
+    if(is_directory(filename)) {
+        sprintf(temp, "%s/prefix_asn_map", filename);
+    }else {
+        sprintf(temp, "%s", filename);
+    }
+	InitSMEM(sizeof(CPrefixASNPair), temp, isReadOnly);
 }
 
 CPrefixASNMap::~CPrefixASNMap() {
@@ -470,15 +482,15 @@ bool CPrefixASNMap::FindByPrefixASNPair(CPrefix* prefix, u_int32_t asn, long* pi
 	while(start <= end) {
 		long j = (start + end)/2;
 		CPrefixASNPair* pair = (CPrefixASNPair*) Get(j);
-		int result = pair->m_prefix.CompareTo(prefix);
-		if(result < 0) {
+		if (pair->m_asn < asn) {
 			start = j + 1;
-		}else if(result > 0) {
+		}else if(pair->m_asn > asn) {
 			end = j - 1;
 		}else {
-			if (pair->m_asn < asn) {
+		    int result = pair->m_prefix.CompareTo(prefix);
+		    if(result < 0) {
 				start = j + 1;
-			}else if(pair->m_asn > asn) {
+		    }else if(result > 0) {
 				end = j - 1;
 			}else {
 				*pindex = j;
@@ -491,30 +503,40 @@ bool CPrefixASNMap::FindByPrefixASNPair(CPrefix* prefix, u_int32_t asn, long* pi
 }
 
 void CPrefixASNMap::AddRecord(CPrefix* prefix, u_int32_t asn) {
-	long index;
+	static long index = -1L;
+    // use cache first
+    if (index >= 0 && index < length) {
+        CPrefixASNPair pap = *((CPrefixASNPair*) Get(index));
+        if (pap.m_asn == asn && pap.m_prefix.CompareTo(prefix) == 0) {
+            pap.m_counter++;
+            Set(&pap, index);
+            return;
+        }
+    }
 	if(FindByPrefixASNPair(prefix, asn, &index)) {
 		CPrefixASNPair pap = *((CPrefixASNPair*) Get(index));
 		pap.m_counter ++;
 		Set(&pap, index);
+        //printf("Find %s\n", pap.toString());
 	}else {
 		CPrefixASNPair pap;
 		pap.m_prefix = *prefix;
 		pap.m_asn = asn;
 		pap.m_counter = 1;
 		Insert(&pap, index);
+        //printf("New %s\n", pap.toString());
 	}
 }
 
-bool CPrefixASNMap::FindByPrefix(CPrefix* prefix, long* pindex) {
+bool CPrefixASNMap::FindByASN(u_int32_t asn, long* pindex) {
 	long start = 0;
 	long end = length - 1;
 	while(start <= end) {
 		long j = (start + end)/2;
 		CPrefixASNPair* pair = (CPrefixASNPair*) Get(j);
-		int result = pair->m_prefix.CompareTo(prefix);
-		if(result < 0) {
+		if(pair->m_asn < asn) {
 			start = j + 1;
-		}else if(result > 0) {
+		}else if(pair->m_asn > asn) {
 			end = j - 1;
 		}else {
 			*pindex = j;
@@ -525,12 +547,13 @@ bool CPrefixASNMap::FindByPrefix(CPrefix* prefix, long* pindex) {
 	return false;
 }
 
-bool CPrefixASNMap::PrintAllASNOfPrefix(CPrefix* prefix) {
+bool CPrefixASNMap::PrintAllPrefixOfASN(u_int32_t asn) {
 	CDynaArray array(sizeof(CPrefixASNPair));
-	if(GetAllASNOfPrefix(prefix, &array)) {
+	if(GetAllPrefixOfASN(asn, &array)) {
 		for(int i = 0; i < array.GetLength(); i ++) {
 			CPrefixASNPair* pap = (CPrefixASNPair*)array.Get(i);
-			printf("%d %s\n", pap->m_counter, asn_n2a(pap->m_asn));
+			printf("%18s %d %d\n", pap->m_prefix.toString(),
+                                pap->m_counter, pap->m_asn);
 		}
 		return true;
 	}else{
@@ -538,16 +561,16 @@ bool CPrefixASNMap::PrintAllASNOfPrefix(CPrefix* prefix) {
 	}
 }
 
-bool CPrefixASNMap::GetAllASNOfPrefix(CPrefix* prefix, CDynaArray* array) {
+bool CPrefixASNMap::GetAllPrefixOfASN(u_int32_t asn, CDynaArray* array) {
 	long index = -1;
-	if(FindByPrefix(prefix, &index)) {
+	if(FindByASN(asn, &index)) {
 		bool upstop = false;
 		bool downstop = false;
 		long index2 = index;
 		while(!upstop || !downstop) {
 			//printf("%ld %ld %ld %d %d\n", index2, index, length, upstop, downstop);
 			CPrefixASNPair* pap = (CPrefixASNPair*) Get(index2);
-			if(pap->m_prefix.CompareTo(prefix) == 0) {
+			if(pap->m_asn == asn) {
 				//printf("%d %d\n", pap->m_counter, pap->m_asn);
 				array->Add(pap);
 			}else {
